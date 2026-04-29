@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二次元手游 - DIY节奏榜编辑器</title>
+    <!-- 引入 Tailwind CSS 用于快速布局 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 引入 SortableJS (拖拽核心) -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- 引入 html2canvas (保存图片) -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Microsoft YaHei', sans-serif; }
+.tier-row { 
+    min-height: 125px; /* 比图片高度稍微大一点点 */
+    transition: background 0.3s; 
+}
+        .ghost { opacity: 0.4; background: #38bdf8; }
+.avatar-card { 
+    width: 80px;      /* 显示宽度，你可以根据需要调整 */
+    height: 110px;    /* 根据 950:1300 比例计算出的显示高度 */
+    cursor: grab; 
+    transition: transform 0.2s; 
+    position: relative; 
+}
+
+/* 确保图片完整显示，不被裁剪 */
+.avatar-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* 重点：contain 确保图片完整缩放在框内，不被切掉 */
+    background-color: #1e293b; /* 给图片加个深色底，防止图片没铺满时有白边 */
+}
+        .avatar-card:active { cursor: grabbing; }
+        .avatar-card:hover { transform: scale(1.05); z-index: 10; }
+        .tier-label { width: 80px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.25rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+
+<div id="app" v-cloak>
+    <div class="max-w-5xl mx-auto">
+<!-- 新增：左上角信息区域 -->
+<div class="flex flex-col md:flex-row gap-6 mb-8 items-start">
+    <!-- 1. Logo 图片 -->
+    <div class="flex-shrink-0">
+        <a href="https://www.gamekee.com/lostsword/" target="_blank">
+            <!-- 请确保你的 img 文件夹里有一张 logo.jpg 或 logo.png，并把名字对上 -->
+            <img src="./img/logo.png" alt="游戏Logo" style="width: 291px; height: 122px;" class="shadow-lg hover:opacity-80 transition">
+        </a>
+    </div>
+
+    <!-- 2. 文案区域 -->
+    <div class="flex flex-col justify-center h-[122px] space-y-2">
+        <p class="text-slate-300">
+            遗忘之剑 X GameKee 攻略网站：
+            <a href="https://www.gamekee.com/lostsword/" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline underline-offset-4">
+                https://www.gamekee.com/lostsword/
+            </a>
+        </p>
+        <p class="text-slate-300">
+            玩家QQ群：
+            <a href="http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=bpHe2Yt0HWISy7hCcr60cEFdjCvDpZ3b&authKey=wzoSF9i9L3Z9bgnx5qGg3pTs6eSvNC7yb%2FzalOD9W21dnGxMP%2Fu85Ud9zUtFRGR3&noverify=0&group_code=557127681" target="_blank" class="text-cyan-400 font-bold hover:text-cyan-300 bg-slate-800 px-2 py-1 rounded">
+                557127681
+            </a>
+        </p>
+    </div>
+</div>
+<!-- 信息区域结束 -->
+
+        <!-- 标题栏 -->
+        <div class="flex justify-between items-end mb-6 border-b border-slate-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-cyan-400">【遗忘之剑】DIY节奏榜编辑器</h1>
+                <p class="text-slate-400 text-sm mt-1">拖拽头像进行排序</p>
+            </div>
+            <div class="space-x-2">
+                <button @click="resetAll" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm transition">重置</button>
+                <button @click="saveAsImage" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded text-sm font-bold transition">保存为图片</button>
+            </div>
+        </div>
+
+        <!-- 节奏榜主体区域 -->
+        <div id="tier-list-capture" class="bg-slate-900 border border-slate-800 p-2 shadow-2xl">
+            <div v-for="tier in tiers" :key="tier.id" class="flex mb-2 group">
+                <!-- 等级标签 -->
+                <div :style="{ backgroundColor: tier.color }" class="tier-label rounded-l text-slate-900">
+                    {{ tier.id }}
+                </div>
+                <!-- 放置容器 -->
+                <div 
+                    :data-tier="tier.id" 
+                    class="tier-row flex-1 flex flex-wrap gap-2 p-3 bg-slate-800/50 rounded-r border-y border-r border-slate-700/50 transition-colors group-hover:bg-slate-800"
+                >
+                    <div v-for="char in tier.list" :key="char.id" :data-id="char.id" @contextmenu.prevent="moveToPool(char, tier.id)" class="avatar-card">
+                        <img :src="char.url" :title="char.name" class="w-full h-full object-cover rounded shadow-md border border-slate-600">
+                    </div>
+                </div>
+            </div>
+            <!-- 底部装饰 -->
+            <div class="text-right text-[10px] text-slate-600 mt-1 italic">Generated by DIY Tier Editor</div>
+        </div>
+
+        <!-- 角色待选池 -->
+        <div class="mt-10 bg-slate-800/30 p-6 rounded-xl border border-dashed border-slate-700">
+            <h2 class="text-lg font-bold mb-4 text-slate-300 flex items-center">
+                <span class="w-2 h-6 bg-cyan-500 mr-2"></span> 角色池
+            </h2>
+            <div id="character-pool" class="flex flex-wrap gap-3 min-h-[120px]">
+                <div v-for="char in characterPool" :key="char.id" :data-id="char.id" class="avatar-card">
+                    <img :src="char.url" :title="char.name" class="w-full h-full object-cover rounded shadow-md border border-slate-600 hover:border-cyan-400 transition-colors">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, onMounted, ref } = Vue;
+
+createApp({
+    setup() {
+        // 模拟数据：你可以把这里的 url 换成你上传的几十个头像路径
+        const initialCharacters = [];
+// 假设你有 30 张图，名字分别是 1.jpg 到 30.jpg
+for (let i = 1; i <= 46; i++) { 
+    initialCharacters.push({
+        id: i,
+        name: '角色' + i,
+        url: './img/' + i + '.jpg'  // <--- 重点：这里一定要改成 .jpg
+    });
+}
+
+        const characterPool = ref([...initialCharacters]);
+        const tiers = ref([
+            { id: 'T0', color: '#ff4e4e', list: [] },
+            { id: 'T0.5', color: '#ff8c42', list: [] },
+            { id: 'T1', color: '#ffd13a', list: [] },
+            { id: 'T2', color: '#4aff3a', list: [] },
+            { id: 'T3', color: '#3aafff', list: [] }
+        ]);
+
+        // 初始化拖拽逻辑
+        const initDraggable = () => {
+            // 角色池初始化
+            new Sortable(document.getElementById('character-pool'), {
+                group: 'shared',
+                animation: 150,
+                ghostClass: 'ghost',
+                onEnd: syncData
+            });
+
+            // 每个 Tier 行初始化
+            document.querySelectorAll('.tier-row').forEach(el => {
+                new Sortable(el, {
+                    group: 'shared',
+                    animation: 150,
+                    ghostClass: 'ghost',
+                    onEnd: syncData
+                });
+            });
+        };
+
+        // 当拖拽停止时，同步 DOM 状态到 Vue 数据 (简单处理)
+        const syncData = () => {
+            // 在实际复杂项目中建议用 vuedraggable 库，
+            // 这里为了演示单文件便捷性，采用 Sortable 原生控制配合简单的状态维护
+        };
+
+        // 右键快速移除
+        const moveToPool = (char, fromTierId) => {
+            const tier = tiers.value.find(t => t.id === fromTierId);
+            tier.list = tier.list.filter(c => c.id !== char.id);
+            characterPool.value.push(char);
+        };
+
+        // 重置
+        const resetAll = () => {
+            if(confirm('确定要清空当前的榜单吗？')) {
+                location.reload();
+            }
+        };
+
+        // 保存为图片
+        const saveAsImage = () => {
+            const area = document.getElementById('tier-list-capture');
+            html2canvas(area, {
+                backgroundColor: '#0f172a',
+                scale: 2, // 提高清晰度
+                useCORS: true
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `我的节奏榜_${new Date().getTime()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        };
+
+        onMounted(() => {
+            initDraggable();
+        });
+
+        return {
+            characterPool,
+            tiers,
+            moveToPool,
+            saveAsImage,
+            resetAll
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
