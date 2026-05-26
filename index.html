@@ -95,20 +95,20 @@
         </div>
 
         <div class="mt-10 bg-slate-800/30 p-6 rounded-xl border border-dashed border-slate-700">
-            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-4">
+            <div class="mb-4">
                 <h2 class="text-lg font-bold text-slate-300 flex items-center">
                     <span class="w-2 h-6 bg-cyan-500 mr-2"></span> 角色池
                 </h2>
-                <div class="w-full md:w-auto flex flex-col md:flex-row gap-2 md:items-center">
-                    <input v-model.trim="customAvatarName" type="text" placeholder="头像名称（可选）" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm text-slate-100 w-full md:w-44">
-                    <input @change="handleLocalAvatarUpload" type="file" accept="image/*" multiple class="text-sm text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded file:border-0 file:bg-cyan-700 file:text-white hover:file:bg-cyan-600">
-                </div>
             </div>
-            <p class="text-xs text-slate-400 mb-3">支持从本地上传头像（jpg/png/webp 等），上传后会自动加入角色池。</p>
             <div id="character-pool" class="flex flex-wrap gap-3 min-h-[120px]">
                 <div v-for="char in characterPool" :key="char.id" :data-id="char.id" class="avatar-card">
                     <img :src="char.url" :title="char.name" class="w-full h-full object-cover rounded shadow-md border border-slate-600 hover:border-cyan-400 transition-colors">
                 </div>
+                <label for="local-avatar-upload" class="avatar-card rounded border-2 border-dashed border-cyan-500/70 bg-slate-900/70 flex flex-col items-center justify-center text-cyan-300 hover:border-cyan-400 hover:text-cyan-200 hover:bg-slate-800 transition-colors cursor-pointer" title="上传头像">
+                    <span class="text-3xl leading-none font-bold">+</span>
+                    <span class="text-xs mt-1">上传头像</span>
+                </label>
+                <input id="local-avatar-upload" @change="handleLocalAvatarUpload" type="file" accept="image/*" multiple class="hidden">
             </div>
         </div>
     </div>
@@ -129,7 +129,6 @@ createApp({
         }
 
         const characterPool = ref([...initialCharacters]);
-        const customAvatarName = ref('');
         const nextCharacterId = ref(initialCharacters.length + 1);
 
         const tiers = ref([
@@ -170,23 +169,22 @@ createApp({
             const files = Array.from(event.target.files || []);
             if (!files.length) return;
 
-            files.forEach((file, index) => {
+            files.forEach((file) => {
                 if (!file.type.startsWith('image/')) return;
 
                 const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-                const name = customAvatarName.value || fileNameWithoutExt || `自定义角色${nextCharacterId.value}`;
+                const name = fileNameWithoutExt || `自定义角色${nextCharacterId.value}`;
                 const objectUrl = URL.createObjectURL(file);
 
                 characterPool.value.push({
                     id: nextCharacterId.value,
-                    name: files.length > 1 ? `${name}_${index + 1}` : name,
+                    name: name,
                     url: objectUrl
                 });
 
                 nextCharacterId.value += 1;
             });
 
-            customAvatarName.value = '';
             event.target.value = '';
         };
 
@@ -217,7 +215,6 @@ createApp({
         return {
             characterPool,
             tiers,
-            customAvatarName,
             handleLocalAvatarUpload,
             moveToPool,
             saveAsImage,
